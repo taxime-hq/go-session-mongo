@@ -1,4 +1,4 @@
-module github.com/go-session/mongo/v3
+module github.com/taxime-hq/go-session-mongo
 
 go 1.17
 
