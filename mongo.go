@@ -25,7 +25,7 @@ func NewStoreWithClient(mongoClient *kmongo.Client, dbName, cName string) sessio
 	return newManagerStore(mongoClient, dbName, cName)
 }
 
-func newManagerStore(mongoClient *kmongo.Client, dbName, cName string) *managerStore {
+func newManagerStore(mongoClient *kmongo.Client, dbName, cName string) session.ManagerStore {
 	collection := mongoClient.Default.Database(dbName).Collection(cName)
 	indexOptions := options.Index().SetExpireAfterSeconds(1)
 	indexModel := mongo.IndexModel{
