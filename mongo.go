@@ -2,8 +2,10 @@ package mongo
 
 import (
 	"context"
-	"github.com/globalsign/mgo"
-	"github.com/taxime-hq/kit/mongo"
+	kmongo "github.com/taxime-hq/kit/mongo"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 	"sync"
 	"time"
 
@@ -18,50 +20,42 @@ var (
 	jsonUnmarshal                      = jsoniter.Unmarshal
 )
 
-// NewStore Create an instance of a mongo store
-//func NewStore(url, dbName, cName string) session.ManagerStore {
-//	session, err := mgo.Dial(url)
-//	if err != nil {
-//		panic(err)
-//	}
-//	return newManagerStore(session, dbName, cName)
-//}
-
-// NewStoreWithSession Create an instance of a mongo store
-func NewStoreWithClient(mongoClient *mongo.Client, dbName, cName string) session.ManagerStore {
+// NewStoreWithClient Create an instance of a mongo store
+func NewStoreWithClient(mongoClient *kmongo.Client, dbName, cName string) session.ManagerStore {
 	return newManagerStore(mongoClient, dbName, cName)
 }
 
-func newManagerStore(mongoClient *mongo.Client, dbName, cName string) *managerStore {
-	err := session.DB(dbName).C(cName).EnsureIndex(mgo.Index{
-		Key:         []string{"expired_at"},
-		ExpireAfter: time.Second,
-	})
+func newManagerStore(mongoClient *kmongo.Client, dbName, cName string) *managerStore {
+	collection := mongoClient.Default.Database(dbName).Collection(cName)
+	indexOptions := options.Index().SetExpireAfterSeconds(1)
+	indexModel := mongo.IndexModel{
+		Keys:    bson.D{{Key: "expired_at", Value: 1}},
+		Options: indexOptions,
+	}
+
+	_, err := collection.Indexes().CreateOne(context.Background(), indexModel)
 	if err != nil {
 		panic(err)
 	}
 
 	return &managerStore{
-		session: session,
-		dbName:  dbName,
-		cName:   cName,
+		mongoClient: mongoClient,
+		dbName:      dbName,
+		cName:       cName,
 	}
 }
 
 type managerStore struct {
-	mongoClient *mongo.Client
+	mongoClient *kmongo.Client
 	dbName      string
 	cName       string
 }
 
 func (s *managerStore) getValue(sid string) (string, error) {
-	session := s.session.Clone()
-	defer session.Close()
-
 	var item sessionItem
-	err := session.DB(s.dbName).C(s.cName).FindId(sid).One(&item)
+	err := s.getCollection().FindOne(context.Background(), bson.M{"_id": sid}).Decode(&item)
 	if err != nil {
-		if err == mgo.ErrNotFound {
+		if err == mongo.ErrNoDocuments {
 			return "", nil
 		}
 		return "", err
@@ -102,14 +96,13 @@ func (s *managerStore) Update(ctx context.Context, sid string, expired int64) (s
 	} else if value == "" {
 		return newStore(ctx, s, sid, expired, nil), nil
 	}
-
-	session := s.session.Clone()
-	defer session.Close()
-	err = session.DB(s.dbName).C(s.cName).UpdateId(sid, bson.M{
+	filter := bson.M{"_id": sid}
+	update := bson.M{
 		"$set": bson.M{
 			"expired_at": time.Now().Add(time.Duration(expired) * time.Second),
 		},
-	})
+	}
+	_, err = s.getCollection().UpdateOne(context.Background(), filter, update)
 	if err != nil {
 		return nil, err
 	}
@@ -123,9 +116,8 @@ func (s *managerStore) Update(ctx context.Context, sid string, expired int64) (s
 }
 
 func (s *managerStore) Delete(_ context.Context, sid string) error {
-	session := s.session.Clone()
-	defer session.Close()
-	return session.DB(s.dbName).C(s.cName).RemoveId(sid)
+	_, err := s.getCollection().DeleteOne(context.Background(), bson.M{"_id": sid})
+	return err
 }
 
 func (s *managerStore) Refresh(ctx context.Context, oldsid, sid string, expired int64) (session.Store, error) {
@@ -135,19 +127,21 @@ func (s *managerStore) Refresh(ctx context.Context, oldsid, sid string, expired 
 	} else if value == "" {
 		return newStore(ctx, s, sid, expired, nil), nil
 	}
-
-	session := s.session.Clone()
-	defer session.Close()
-	c := session.DB(s.dbName).C(s.cName)
-	_, err = c.UpsertId(sid, &sessionItem{
-		ID:        sid,
-		Value:     value,
-		ExpiredAt: time.Now().Add(time.Duration(expired) * time.Second),
-	})
+	filterNew := bson.M{"_id": sid}
+	update := bson.M{
+		"$set": bson.M{
+			"_id":        sid,
+			"value":      value,
+			"expired_at": time.Now().Add(time.Duration(expired) * time.Second),
+		},
+	}
+	_, err = s.getCollection().UpdateOne(ctx, filterNew, update, options.Update().SetUpsert(true))
 	if err != nil {
 		return nil, err
 	}
-	err = c.RemoveId(oldsid)
+
+	filterOld := bson.M{"_id": oldsid}
+	_, err = s.getCollection().DeleteOne(ctx, filterOld)
 	if err != nil {
 		return nil, err
 	}
@@ -160,8 +154,11 @@ func (s *managerStore) Refresh(ctx context.Context, oldsid, sid string, expired 
 	return newStore(ctx, s, sid, expired, values), nil
 }
 
+func (s *managerStore) getCollection() *mongo.Collection {
+	return s.mongoClient.Default.Database(s.dbName).Collection(s.cName)
+}
+
 func (s *managerStore) Close() error {
-	s.session.Close()
 	return nil
 }
 
@@ -171,25 +168,25 @@ func newStore(ctx context.Context, s *managerStore, sid string, expired int64, v
 	}
 
 	return &store{
-		session: s.session,
-		dbName:  s.dbName,
-		cName:   s.cName,
-		ctx:     ctx,
-		sid:     sid,
-		expired: expired,
-		values:  values,
+		mongoClient: s.mongoClient,
+		dbName:      s.dbName,
+		cName:       s.cName,
+		ctx:         ctx,
+		sid:         sid,
+		expired:     expired,
+		values:      values,
 	}
 }
 
 type store struct {
 	sync.RWMutex
-	ctx     context.Context
-	session *mgo.Session
-	dbName  string
-	cName   string
-	sid     string
-	expired int64
-	values  map[string]interface{}
+	ctx         context.Context
+	mongoClient *kmongo.Client
+	dbName      string
+	cName       string
+	sid         string
+	expired     int64
+	values      map[string]interface{}
 }
 
 func (s *store) Context() context.Context {
@@ -245,14 +242,15 @@ func (s *store) Save() error {
 		value = string(buf)
 	}
 	s.RUnlock()
-
-	session := s.session.Clone()
-	defer session.Close()
-	_, err := session.DB(s.dbName).C(s.cName).UpsertId(s.sid, &sessionItem{
-		ID:        s.sid,
-		Value:     value,
-		ExpiredAt: time.Now().Add(time.Duration(s.expired) * time.Second),
-	})
+	filter := bson.M{"_id": s.sid}
+	update := bson.M{
+		"$set": bson.M{
+			"_id":        s.sid,
+			"value":      value,
+			"expired_at": time.Now().Add(time.Duration(s.expired) * time.Second),
+		},
+	}
+	_, err := s.mongoClient.Default.Database(s.dbName).Collection(s.cName).UpdateOne(context.Background(), filter, update, options.Update().SetUpsert(true))
 
 	return err
 }

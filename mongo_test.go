@@ -2,7 +2,10 @@ package mongo
 
 import (
 	"context"
+	kmongo "github.com/taxime-hq/kit/mongo"
+	"log"
 	"testing"
+	"time"
 
 	. "github.com/smartystreets/goconvey/convey"
 )
@@ -14,7 +17,20 @@ const (
 )
 
 func TestStore(t *testing.T) {
-	mstore := NewStore(url, dbName, cName)
+	mongoClient := kmongo.NewMongoClient([]string{url})
+	err := mongoClient.Connect(time.Second * 6)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		err := mongoClient.Disconnect()
+		if err != nil {
+			log.Panicf("can not disconnect from mongo, due to %v", err)
+			return
+		}
+	}()
+
+	mstore := newManagerStore(mongoClient, dbName, cName)
 	defer mstore.Close()
 
 	Convey("Test mongo storage operation", t, func() {
@@ -54,7 +70,20 @@ func TestStore(t *testing.T) {
 }
 
 func TestManagerStore(t *testing.T) {
-	mstore := NewStore(url, dbName, cName)
+	mongoClient := kmongo.NewMongoClient([]string{url})
+	err := mongoClient.Connect(time.Second * 6)
+	if err != nil {
+		panic(err)
+	}
+	defer func() {
+		err := mongoClient.Disconnect()
+		if err != nil {
+			log.Panicf("can not disconnect from mongo, due to %v", err)
+			return
+		}
+	}()
+
+	mstore := newManagerStore(mongoClient, dbName, cName)
 	defer mstore.Close()
 
 	Convey("Test mongo-based storage management operations", t, func() {
