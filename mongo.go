@@ -85,6 +85,7 @@ func (s *managerStore) Check(_ context.Context, sid string) (bool, error) {
 	return val != "", nil
 }
 
+// Create(ctx context.Context, sid string, expired int64) (Store, error)
 func (s *managerStore) Create(ctx context.Context, sid string, expired int64) (session.Store, error) {
 	return newStore(ctx, s, sid, expired, nil), nil
 }
@@ -162,7 +163,7 @@ func (s *managerStore) Close() error {
 	return nil
 }
 
-func newStore(ctx context.Context, s *managerStore, sid string, expired int64, values map[string]interface{}) *store {
+func newStore(ctx context.Context, s *managerStore, sid string, expired int64, values map[string]interface{}) session.Store {
 	if values == nil {
 		values = make(map[string]interface{})
 	}
