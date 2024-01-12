@@ -2,11 +2,11 @@ package mongo
 
 import (
 	"context"
+	"github.com/globalsign/mgo"
+	"github.com/taxime-hq/kit/mongo"
 	"sync"
 	"time"
 
-	"github.com/globalsign/mgo"
-	"github.com/globalsign/mgo/bson"
 	session "github.com/go-session/session/v3"
 	jsoniter "github.com/json-iterator/go"
 )
@@ -19,20 +19,20 @@ var (
 )
 
 // NewStore Create an instance of a mongo store
-func NewStore(url, dbName, cName string) session.ManagerStore {
-	session, err := mgo.Dial(url)
-	if err != nil {
-		panic(err)
-	}
-	return newManagerStore(session, dbName, cName)
-}
+//func NewStore(url, dbName, cName string) session.ManagerStore {
+//	session, err := mgo.Dial(url)
+//	if err != nil {
+//		panic(err)
+//	}
+//	return newManagerStore(session, dbName, cName)
+//}
 
 // NewStoreWithSession Create an instance of a mongo store
-func NewStoreWithSession(session *mgo.Session, dbName, cName string) session.ManagerStore {
-	return newManagerStore(session, dbName, cName)
+func NewStoreWithClient(mongoClient *mongo.Client, dbName, cName string) session.ManagerStore {
+	return newManagerStore(mongoClient, dbName, cName)
 }
 
-func newManagerStore(session *mgo.Session, dbName, cName string) *managerStore {
+func newManagerStore(mongoClient *mongo.Client, dbName, cName string) *managerStore {
 	err := session.DB(dbName).C(cName).EnsureIndex(mgo.Index{
 		Key:         []string{"expired_at"},
 		ExpireAfter: time.Second,
@@ -49,9 +49,9 @@ func newManagerStore(session *mgo.Session, dbName, cName string) *managerStore {
 }
 
 type managerStore struct {
-	session *mgo.Session
-	dbName  string
-	cName   string
+	mongoClient *mongo.Client
+	dbName      string
+	cName       string
 }
 
 func (s *managerStore) getValue(sid string) (string, error) {
