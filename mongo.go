@@ -3,9 +3,9 @@ package mongo
 import (
 	"context"
 	kmongo "github.com/taxime-hq/kit/mongo"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"sync"
 	"time"
 
@@ -21,11 +21,11 @@ var (
 )
 
 // NewStoreWithClient Create an instance of a mongo store
-func NewStoreWithClient(mongoClient *kmongo.Client, dbName, cName string) session.ManagerStore {
+func NewStoreWithClient(mongoClient *kmongo.ClientV2, dbName, cName string) session.ManagerStore {
 	return newManagerStore(mongoClient, dbName, cName)
 }
 
-func newManagerStore(mongoClient *kmongo.Client, dbName, cName string) session.ManagerStore {
+func newManagerStore(mongoClient *kmongo.ClientV2, dbName, cName string) session.ManagerStore {
 	collection := mongoClient.Default.Database(dbName).Collection(cName)
 	indexOptions := options.Index().SetExpireAfterSeconds(1)
 	indexModel := mongo.IndexModel{
@@ -46,7 +46,7 @@ func newManagerStore(mongoClient *kmongo.Client, dbName, cName string) session.M
 }
 
 type managerStore struct {
-	mongoClient *kmongo.Client
+	mongoClient *kmongo.ClientV2
 	dbName      string
 	cName       string
 }
@@ -136,7 +136,7 @@ func (s *managerStore) Refresh(ctx context.Context, oldsid, sid string, expired 
 			"expired_at": time.Now().Add(time.Duration(expired) * time.Second),
 		},
 	}
-	_, err = s.getCollection().UpdateOne(ctx, filterNew, update, options.Update().SetUpsert(true))
+	_, err = s.getCollection().UpdateOne(ctx, filterNew, update, options.UpdateOne().SetUpsert(true))
 	if err != nil {
 		return nil, err
 	}
@@ -182,7 +182,7 @@ func newStore(ctx context.Context, s *managerStore, sid string, expired int64, v
 type store struct {
 	sync.RWMutex
 	ctx         context.Context
-	mongoClient *kmongo.Client
+	mongoClient *kmongo.ClientV2
 	dbName      string
 	cName       string
 	sid         string
@@ -251,7 +251,7 @@ func (s *store) Save() error {
 			"expired_at": time.Now().Add(time.Duration(s.expired) * time.Second),
 		},
 	}
-	_, err := s.mongoClient.Default.Database(s.dbName).Collection(s.cName).UpdateOne(context.Background(), filter, update, options.Update().SetUpsert(true))
+	_, err := s.mongoClient.Default.Database(s.dbName).Collection(s.cName).UpdateOne(context.Background(), filter, update, options.UpdateOne().SetUpsert(true))
 
 	return err
 }

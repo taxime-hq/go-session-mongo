@@ -17,7 +17,7 @@ const (
 )
 
 func TestStore(t *testing.T) {
-	mongoClient := kmongo.NewMongoClient([]string{url})
+	mongoClient := kmongo.NewMongoClientV2([]string{url})
 	err := mongoClient.Connect(time.Second * 6)
 	if err != nil {
 		panic(err)
@@ -70,7 +70,7 @@ func TestStore(t *testing.T) {
 }
 
 func TestManagerStore(t *testing.T) {
-	mongoClient := kmongo.NewMongoClient([]string{url})
+	mongoClient := kmongo.NewMongoClientV2([]string{url})
 	err := mongoClient.Connect(time.Second * 6)
 	if err != nil {
 		panic(err)
