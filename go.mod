@@ -1,12 +1,12 @@
 module github.com/taxime-hq/go-session-mongo
 
-go 1.24.0
+go 1.25.0
 
 require (
 	github.com/go-session/session/v3 v3.2.0
 	github.com/json-iterator/go v1.1.12
 	github.com/smartystreets/goconvey v1.7.2
-	github.com/taxime-hq/kit v0.0.0-20250515125856-b9f2e6f45a63
+	github.com/taxime-hq/kit v0.0.0-20260515085012-896e9a1ec902
 	go.mongodb.org/mongo-driver/v2 v2.2.1
 )
 
@@ -25,7 +25,7 @@ require (
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	go.mongodb.org/mongo-driver v1.17.3 // indirect
-	golang.org/x/crypto v0.45.0 // indirect
-	golang.org/x/sync v0.18.0 // indirect
-	golang.org/x/text v0.31.0 // indirect
+	golang.org/x/crypto v0.49.0 // indirect
+	golang.org/x/sync v0.20.0 // indirect
+	golang.org/x/text v0.35.0 // indirect
 )
